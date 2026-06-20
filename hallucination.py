@@ -44,8 +44,8 @@ def score_answer(answer: str, retrieved_chunks: list[str]) -> HallucinationRepor
 
     for sentence in sentences:
         clean = _clean_sentence(sentence)
-        best_label = "NEUTRAL"
-        best_score = 0.0
+        scores = {"ENTAILMENT": 0.0, "NEUTRAL": 0.0, "CONTRADICTION": 0.0}
+        seen = {"ENTAILMENT": False, "NEUTRAL": False, "CONTRADICTION": False}
 
         for chunk in retrieved_chunks:
             inp = f"{chunk} [SEP] {clean}"
@@ -53,13 +53,23 @@ def score_answer(answer: str, retrieved_chunks: list[str]) -> HallucinationRepor
             label = result["label"].upper()
             score = result["score"]
 
+            if not seen[label] or score > scores[label]:
+                scores[label] = score
+                seen[label] = True
+
             if label == "ENTAILMENT":
-                best_label = "ENTAILMENT"
-                best_score = score
-                break
-            elif label == "CONTRADICTION" and best_label == "NEUTRAL":
-                best_label = "CONTRADICTION"
-                best_score = score
+                break  # top priority found, no need to keep scanning
+
+        if seen["ENTAILMENT"]:
+            best_label = "ENTAILMENT"
+        elif seen["NEUTRAL"]:
+            best_label = "NEUTRAL"
+        elif seen["CONTRADICTION"]:
+            best_label = "CONTRADICTION"
+        else:
+            best_label = "NEUTRAL"
+
+        best_score = scores[best_label]
 
         if best_label == "ENTAILMENT":
             entailed_count += 1
